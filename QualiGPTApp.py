@@ -6,6 +6,7 @@
 
 import sys
 import pandas as pd
+import openai
 from openai import OpenAI
 import traceback
 import nltk
@@ -26,11 +27,6 @@ class QualiGPTApp(QMainWindow):
         # Initialize the API connection flag
         self.connected_to_api = False
         self.TESTING = False
-        
-        self.current_dataset = None  # Add this line
-        self.dataset_segments = []
-        self.saved_segments = []
-        self.all_responses = [] # Used to store all responses
 
         # Initialize window
         self.setWindowTitle("QualiGPT: Qualitative Data Analysis Tool")
@@ -84,11 +80,6 @@ class QualiGPTApp(QMainWindow):
         self.import_button = QPushButton("Import Word, CSV or Excel File")
         self.import_button.clicked.connect(self.get_file)
         self.layout.addWidget(self.import_button)
-        
-        # Submit dataset to ChatGPT API Button
-        self.submit_dataset_button = QPushButton("Submit Dataset")
-        self.submit_dataset_button.clicked.connect(self.submit_dataset)
-        self.layout.addWidget(self.submit_dataset_button)
 
         # Header meanings
         self.header_form = QFormLayout()
@@ -249,125 +240,34 @@ class QualiGPTApp(QMainWindow):
         prompt = self.preset_prompt.toPlainText()
     
         # Combine the dataset and the prompt into a single message
-        #combined_message = self.data_content + "\n\n" + prompt
-        if len(self.dataset_segments) > 1:
+        combined_message = self.data_content + "\n\n" + prompt
+        # Display the prompt being sent to the API
+        self.display_prompt(combined_message)
+         # Send the segment to the API
+        try:
+            response = client.chat.completions.create(model=self.model_selector.currentText(), messages=[
+                {"role": "system", "content": "You are a helpful assistant."},
+                {"role": "user", "content": combined_message}
+            ])
+            response_content = response.choices[0].message.content
             
-            for segment in self.saved_segments:
-            # Construct the full prompt for this segment
-                combined_message = segment + "\n\n" + prompt  # Use the same prompt for each segment
-                # Display the prompt being sent to the API
-                self.display_prompt(combined_message)
-                # Send the segment to the API
-                try:
-                    response = client.chat.completions.create(model=self.model_selector.currentText(), messages=[
-                        {"role": "system", "content": "You are a helpful assistant."},
-                        {"role": "user", "content": combined_message}
-                    ])
-                    response_content = response.choices[0].message.content
-                    self.all_responses.append(response_content) # save the response
-                    
-                    # Check if the response is close to the token limit
-                    if len(response_content.split()) > 4000:  # This is an arbitrary number, adjust as needed
-                        QMessageBox.warning(self, "Warning", "The response might be truncated due to token limits.")
-                    
-                    self.text_area.moveCursor(QTextCursor.End)
-                    self.text_area.append("Response:\n" + response_content)
-                except openai.OpenAIError as e:
-                    print(f"OpenAI Error: {str(e)}")
-                    QMessageBox.critical(self, "Error", f"Failed to call ChatGPT API. OpenAI Error: {str(e)}")
-                except Exception as e:
-                    print(f"Other Error: {str(e)}")
-                    QMessageBox.critical(self, "Error", f"Failed to call ChatGPT API. Other Error: {str(e)}")
-            # After processing all segments, merge the responses and analyze again
-            merged_responses = "\n".join(self.all_responses)
-            self.analyze_merged_responses(merged_responses)
-        else:
-            combined_message = self.data_content + "\n\n" + prompt
-            # Display the prompt being sent to the API
-            self.display_prompt(combined_message)
-             # Send the segment to the API
-            try:
-                response = client.chat.completions.create(model=self.model_selector.currentText(), messages=[
-                    {"role": "system", "content": "You are a helpful assistant."},
-                    {"role": "user", "content": combined_message}
-                ])
-                response_content = response.choices[0].message.content
-                self.all_responses.append(response_content) # save the response
-                
-                # Check if the response is close to the token limit
-                if len(response_content.split()) > 4000:  # This is an arbitrary number, adjust as needed
-                    QMessageBox.warning(self, "Warning", "The response might be truncated due to token limits.")
-                
-                self.text_area.moveCursor(QTextCursor.End)
-                self.text_area.append("Response:\n" + response_content)
-            except openai.OpenAIError as e:
-                print(f"OpenAI Error: {str(e)}")
-                QMessageBox.critical(self, "Error", f"Failed to call ChatGPT API. OpenAI Error: {str(e)}")
-            except Exception as e:
-                print(f"Other Error: {str(e)}")
-                QMessageBox.critical(self, "Error", f"Failed to call ChatGPT API. Other Error: {str(e)}")
+            # Check if the response is close to the token limit
+            if len(response_content.split()) > 4000:  # This is an arbitrary number, adjust as needed
+                QMessageBox.warning(self, "Warning", "The response might be truncated due to token limits.")
+            
+            self.text_area.moveCursor(QTextCursor.End)
+            self.text_area.append("Response:\n" + response_content)
+        except openai.OpenAIError as e:
+            print(f"OpenAI Error: {str(e)}")
+            QMessageBox.critical(self, "Error", f"Failed to call ChatGPT API. OpenAI Error: {str(e)}")
+        except Exception as e:
+            print(f"Other Error: {str(e)}")
+            QMessageBox.critical(self, "Error", f"Failed to call ChatGPT API. Other Error: {str(e)}")
                 
     def display_prompt(self, prompt):
         self.text_area.moveCursor(QTextCursor.End)
         self.text_area.append("Prompt Sent to API:\n" + prompt + "\n\n")
         
-    def analyze_merged_responses(self, merged_responses):
-        # Construct a new prompt for the merged responses
-        new_prompt = "This is the result of a thematic analysis of several parts of the dataset. Now, summarize the same themes to generate a new table. \
-        \nPlease identify the 10 most common key themes from the interview and organize the results in a structured table format. \
-        \nThe table should include the following columns:\
-        \n'Theme': Represents the main idea or topic identified from the interview.\
-        \n'Description': Provides a brief explanation or summary of the theme.\
-        \n'Quotes': Contains direct quotations from participants that support the identified theme.\
-        \n'Participant Count': Indicates the number of participants who mentioned or alluded to the theme. Ensure this count reflects the actual number of participants who discussed each theme.\
-        \nThe table should be formatted strictly as follows:\
-\n- Start the table with '**********'.\
-\n- The header row should be: | 'Theme' | 'Description' | 'Quotes' | 'Participant Count' |\
-\n- Followed by a row of '|---|---|---|---|'.\
-\n- Each subsequent row should represent a theme and its details, with columns separated by '|'.\
-\n- Each row should end with '---'.\
-\n- End the table with '**********'.\
-\nEnsure each row of the table represents a distinct theme and its associated details. \
-\nAnalyze the following merged responses: " + merged_responses
-        self.display_prompt(new_prompt)
-        try:
-            response = client.chat.completions.create(model=self.model_selector.currentText(), messages=[
-                {"role": "system", "content": "You are a helpful assistant."},
-                {"role": "user", "content": new_prompt}
-            ])
-            response_content = response.choices[0].message.content
-            
-            # Display the final analysis
-            self.text_area.moveCursor(QTextCursor.End)
-            self.text_area.append("Final Analysis:\n" + response_content)
-        except openai.OpenAIError as e:
-            print(f"OpenAI Error: {str(e)}")
-            QMessageBox.critical(self, "Error", f"Failed to analyze merged responses. OpenAI Error: {str(e)}")
-        except Exception as e:
-            print(f"Other Error: {str(e)}")
-            QMessageBox.critical(self, "Error", f"Failed to analyze merged responses. Other Error: {str(e)}")
-   
-    def submit_dataset(self):
-        # 检查是否已经连接到OpenAI API
-        if not self.connected_to_api and not self.TESTING:
-            QMessageBox.warning(self, "Warning", "Please connect to the OpenAI API first.")
-            return
-       
-        print("Data Content:", self.data_content[:500])  # Print the first 500 characters of the dataset for debugging
-        print("Number of Segments:", len(self.dataset_segments))
-
-         # 如果数据内容超过4096 tokens
-        if len(self.data_content) > 4096:
-            self.dataset_segments = self.split_into_segments(self.data_content, 4096 - 1500)  # Reserve some tokens for additional prompts
-            # 不要在这里提交分段，只是保存它们
-            self.saved_segments = self.dataset_segments
-            QMessageBox.information(self, "Success", "Dataset has been segmented and is ready for analysis.")
-        else:
-            # 如果数据内容不超过4096 tokens
-            self.saved_segments = [self.data_content]
-
-            QMessageBox.information(self, "Success", "Dataset has been segmented and is ready for analysis.")
-
     def save_result(self):
         # 获取保存路径
         save_path, _ = QFileDialog.getSaveFileName(self, "Save Analysis Result", "", "Text Files (*.txt);;CSV Files (*.csv)")
@@ -420,27 +320,6 @@ class QualiGPTApp(QMainWindow):
 
         if save_path:
             df.to_csv(save_path, index=False)  # Ensure not to save row indices
-    def submit_next_segment(self):
-        if self.current_segment_index < len(self.segments):
-            segment = self.segments[self.current_segment_index]
-            interim_prompt = segment + "\n(Note: This dataset has more content following this segment.)"
-            try:
-                response = client.chat.completions.create(model=self.model_selector.currentText(), messages=[
-                    {"role": "system", "content": "You are a helpful assistant."},
-                    {"role": "user", "content": interim_prompt}
-                ])
-                self.responses.append(response.choices[0].message.content)
-                self.current_segment_index += 1
-                if self.current_segment_index < len(self.segments):
-                    QMessageBox.information(self, "Progress", f"Segment {self.current_segment_index} out of {len(self.segments)} has been submitted. Please submit the next segment.")
-                else:
-                    QMessageBox.information(self, "Success", "All segments have been successfully submitted to the API.")
-            except openai.OpenAIError as e:
-                print(f"OpenAI Error: {str(e)}")
-                QMessageBox.critical(self, "Error", f"Failed to submit dataset segment to ChatGPT API. OpenAI Error: {str(e)}")
-            except Exception as e:
-                print(f"Other Error: {str(e)}")
-                QMessageBox.critical(self, "Error", f"Failed to submit dataset segment to ChatGPT API. Other Error: {str(e)}")
 
 
     def load_result(self):
@@ -475,44 +354,6 @@ class QualiGPTApp(QMainWindow):
 
         return parsed_data
     
-    def send_segments_to_chatgpt(self, data_content, prompt):
-        # Split the data_content into segments
-        segments = self.split_into_segments(data_content, 4096 - 1500)  # Reserve some tokens for additional prompts
-    
-        # Initialize a list to store responses
-        responses = []
-    
-        # Send each segment to ChatGPT with a continuation prompt
-        for i, segment in enumerate(segments):
-            # Check if it's the last segment
-            if i == len(segments) - 1:
-                # If it's the last segment, use the main prompt
-                current_prompt = prompt
-            else:
-                # Otherwise, use a continuation prompt
-                current_prompt = "Continuing with the next segment of data..."
-    
-            messages = [
-                {"role": "system", "content": "You are a helpful assistant."},
-                {"role": "user", "content": current_prompt},
-                {"role": "user", "content": segment}
-            ]
-    
-            try:
-                response = client.chat.completions.create(model=self.model_selector.currentText(), messages=messages)
-                responses.append(response.choices[0].message.content)
-            except openai.OpenAIError as e:
-                print(f"OpenAI Error: {str(e)}")
-                QMessageBox.critical(self, "Error", f"Failed to call ChatGPT API. OpenAI Error: {str(e)}")
-                return None
-            except Exception as e:
-                print(f"Other Error: {str(e)}")
-                QMessageBox.critical(self, "Error", f"Failed to call ChatGPT API. Other Error: {str(e)}")
-                return None
-    
-        # Combine all the responses
-        combined_response = "\n".join(responses)
-        return combined_response
 
     def split_into_segments(self, text, max_tokens = 3800):
         sentences = sent_tokenize(text)
