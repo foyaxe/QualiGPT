@@ -96,6 +96,22 @@ class QualiGPTApp(QMainWindow):
         self.setCentralWidget(self.central_widget)
 
     def init_elements(self):
+        # GPT model selector
+        self.model_selector_label = QLabel("Select openai model:")
+        self.layout.addWidget(self.model_selector_label)
+    
+        self.model_selector = QComboBox()
+        self.layout.addWidget(self.model_selector)
+        self.model_selector.clear()
+        self.model_selector.addItem("gpt-3.5-turbo")
+        self.model_selector.addItem("gpt-4o")
+        self.model_selector.addItem("gpt-4o-mini")
+        self.model_selector.addItem("o1")
+        self.model_selector.addItem("o1-mini")
+        self.model_selector.addItem("o3-mini")
+        self.model_selector.setCurrentIndex(1)
+        self.model_selector.setEditable(True)
+    
         # API Key input
         self.api_key_label = QLabel("Enter API Key:")
         self.layout.addWidget(self.api_key_label)
@@ -232,7 +248,7 @@ class QualiGPTApp(QMainWindow):
         openai.api_key = api_key
         try:
             # Simple test call to OpenAI
-            client.chat.completions.create(model="gpt-3.5-turbo",
+            client.chat.completions.create(model=self.model_selector.currentText(),
                 messages=[
                     {"role": "system", "content": "You are a helpful assistant."},
                     {"role": "user", "content": "test"},
@@ -241,6 +257,7 @@ class QualiGPTApp(QMainWindow):
             self.api_status_label.setText("API Connection: Connected")
             self.connected_to_api = True
             self.TESTING = False
+            self.model_selector.setEnabled(False)
             QMessageBox.information(self, "Success", "API Key is valid. You are now connected to OpenAI.")
         except Exception as e:
             traceback.print_exc()
@@ -347,7 +364,7 @@ class QualiGPTApp(QMainWindow):
                 self.display_prompt(combined_message)
                 # Send the segment to the API
                 try:
-                    response = client.chat.completions.create(model="gpt-3.5-turbo", messages=[
+                    response = client.chat.completions.create(model=self.model_selector.currentText(), messages=[
                         {"role": "system", "content": "You are a helpful assistant."},
                         {"role": "user", "content": combined_message}
                     ])
@@ -375,7 +392,7 @@ class QualiGPTApp(QMainWindow):
             self.display_prompt(combined_message)
              # Send the segment to the API
             try:
-                response = client.chat.completions.create(model="gpt-3.5-turbo", messages=[
+                response = client.chat.completions.create(model=self.model_selector.currentText(), messages=[
                     {"role": "system", "content": "You are a helpful assistant."},
                     {"role": "user", "content": combined_message}
                 ])
@@ -419,7 +436,7 @@ class QualiGPTApp(QMainWindow):
 \nAnalyze the following merged responses: " + merged_responses
         self.display_prompt(new_prompt)
         try:
-            response = client.chat.completions.create(model="gpt-3.5-turbo", messages=[
+            response = client.chat.completions.create(model=self.model_selector.currentText(), messages=[
                 {"role": "system", "content": "You are a helpful assistant."},
                 {"role": "user", "content": new_prompt}
             ])
@@ -513,7 +530,7 @@ class QualiGPTApp(QMainWindow):
             segment = self.segments[self.current_segment_index]
             interim_prompt = segment + "\n(Note: This dataset has more content following this segment.)"
             try:
-                response = client.chat.completions.create(model="gpt-3.5-turbo", messages=[
+                response = client.chat.completions.create(model=self.model_selector.currentText(), messages=[
                     {"role": "system", "content": "You are a helpful assistant."},
                     {"role": "user", "content": interim_prompt}
                 ])
@@ -587,7 +604,7 @@ class QualiGPTApp(QMainWindow):
             ]
     
             try:
-                response = client.chat.completions.create(model="gpt-3.5-turbo", messages=messages)
+                response = client.chat.completions.create(model=self.model_selector.currentText(), messages=messages)
                 responses.append(response.choices[0].message.content)
             except openai.OpenAIError as e:
                 print(f"OpenAI Error: {str(e)}")
