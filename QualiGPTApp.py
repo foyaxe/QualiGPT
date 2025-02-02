@@ -10,6 +10,7 @@
 import sys
 import pandas as pd
 import openai
+from openai import OpenAI
 import traceback
 import nltk
 from docx import Document
@@ -225,14 +226,14 @@ class QualiGPTApp(QMainWindow):
         
     def test_api_key(self):
         api_key = self.api_key_input.text()
+        client = OpenAI(api_key=api_key)
         if api_key == "albert":
             api_key = "copy-right by He (Albert) Zhang "
             #this application belongs to He (Albert) Zhang - hpz5211@psu.edu
         openai.api_key = api_key
         try:
             # Simple test call to OpenAI
-            openai.ChatCompletion.create(
-                model="gpt-3.5-turbo",
+            client.chat.completions.create(model="gpt-3.5-turbo",
                 messages=[
                     {"role": "system", "content": "You are a helpful assistant."},
                     {"role": "user", "content": "test"},
@@ -326,7 +327,7 @@ class QualiGPTApp(QMainWindow):
 
     def call_chatgpt(self):
         api_key = self.api_key_input.text()
-    
+        client = OpenAI(api_key=api_key)
         if not self.connected_to_api and not self.TESTING:
             QMessageBox.warning(self, "Warning", "Please connect to the OpenAI API first.")
             return
@@ -347,11 +348,11 @@ class QualiGPTApp(QMainWindow):
                 self.display_prompt(combined_message)
                 # Send the segment to the API
                 try:
-                    response = openai.ChatCompletion.create(model="gpt-3.5-turbo", messages=[
+                    response = client.chat.completions.create(model="gpt-3.5-turbo", messages=[
                         {"role": "system", "content": "You are a helpful assistant."},
                         {"role": "user", "content": combined_message}
                     ])
-                    response_content = response['choices'][0]['message']['content']
+                    response_content = response.choices[0].message.content
                     self.all_responses.append(response_content) # save the response
                     
                     # Check if the response is close to the token limit
@@ -360,7 +361,7 @@ class QualiGPTApp(QMainWindow):
                     
                     self.text_area.moveCursor(QTextCursor.End)
                     self.text_area.append("Response:\n" + response_content)
-                except openai.error.OpenAIError as e:
+                except openai.OpenAIError as e:
                     print(f"OpenAI Error: {str(e)}")
                     QMessageBox.critical(self, "Error", f"Failed to call ChatGPT API. OpenAI Error: {str(e)}")
                 except Exception as e:
@@ -375,7 +376,7 @@ class QualiGPTApp(QMainWindow):
             self.display_prompt(combined_message)
              # Send the segment to the API
             try:
-                response = openai.ChatCompletion.create(model="gpt-3.5-turbo", messages=[
+                response = client.chat.completions.create(model="gpt-3.5-turbo", messages=[
                     {"role": "system", "content": "You are a helpful assistant."},
                     {"role": "user", "content": combined_message}
                 ])
@@ -388,7 +389,7 @@ class QualiGPTApp(QMainWindow):
                 
                 self.text_area.moveCursor(QTextCursor.End)
                 self.text_area.append("Response:\n" + response_content)
-            except openai.error.OpenAIError as e:
+            except openai.OpenAIError as e:
                 print(f"OpenAI Error: {str(e)}")
                 QMessageBox.critical(self, "Error", f"Failed to call ChatGPT API. OpenAI Error: {str(e)}")
             except Exception as e:
@@ -419,16 +420,16 @@ class QualiGPTApp(QMainWindow):
 \nAnalyze the following merged responses: " + merged_responses
         self.display_prompt(new_prompt)
         try:
-            response = openai.ChatCompletion.create(model="gpt-3.5-turbo", messages=[
+            response = client.chat.completions.create(model="gpt-3.5-turbo", messages=[
                 {"role": "system", "content": "You are a helpful assistant."},
                 {"role": "user", "content": new_prompt}
             ])
-            response_content = response['choices'][0]['message']['content']
+            response_content = response.choices[0].message.content
             
             # Display the final analysis
             self.text_area.moveCursor(QTextCursor.End)
             self.text_area.append("Final Analysis:\n" + response_content)
-        except openai.error.OpenAIError as e:
+        except openai.OpenAIError as e:
             print(f"OpenAI Error: {str(e)}")
             QMessageBox.critical(self, "Error", f"Failed to analyze merged responses. OpenAI Error: {str(e)}")
         except Exception as e:
@@ -513,17 +514,17 @@ class QualiGPTApp(QMainWindow):
             segment = self.segments[self.current_segment_index]
             interim_prompt = segment + "\n(Note: This dataset has more content following this segment.)"
             try:
-                response = openai.ChatCompletion.create(model="gpt-3.5-turbo", messages=[
+                response = client.chat.completions.create(model="gpt-3.5-turbo", messages=[
                     {"role": "system", "content": "You are a helpful assistant."},
                     {"role": "user", "content": interim_prompt}
                 ])
-                self.responses.append(response['choices'][0]['message']['content'])
+                self.responses.append(response.choices[0].message.content)
                 self.current_segment_index += 1
                 if self.current_segment_index < len(self.segments):
                     QMessageBox.information(self, "Progress", f"Segment {self.current_segment_index} out of {len(self.segments)} has been submitted. Please submit the next segment.")
                 else:
                     QMessageBox.information(self, "Success", "All segments have been successfully submitted to the API.")
-            except openai.error.OpenAIError as e:
+            except openai.OpenAIError as e:
                 print(f"OpenAI Error: {str(e)}")
                 QMessageBox.critical(self, "Error", f"Failed to submit dataset segment to ChatGPT API. OpenAI Error: {str(e)}")
             except Exception as e:
@@ -587,9 +588,9 @@ class QualiGPTApp(QMainWindow):
             ]
     
             try:
-                response = openai.ChatCompletion.create(model="gpt-3.5-turbo", messages=messages)
-                responses.append(response['choices'][0]['message']['content'])
-            except openai.error.OpenAIError as e:
+                response = client.chat.completions.create(model="gpt-3.5-turbo", messages=messages)
+                responses.append(response.choices[0].message.content)
+            except openai.OpenAIError as e:
                 print(f"OpenAI Error: {str(e)}")
                 QMessageBox.critical(self, "Error", f"Failed to call ChatGPT API. OpenAI Error: {str(e)}")
                 return None
