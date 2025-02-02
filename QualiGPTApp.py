@@ -1,20 +1,15 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[1]:
-
-
-# QualiGPT-v0.1.0-alpha Created by: @Albert He Zhang 
-# This is an old version
+# QualiGPT Created by: @Albert He Zhang
+# v0.2.0-alpha modified by foyaxe
 
 import sys
 import pandas as pd
-import openai
 from openai import OpenAI
 import traceback
 import nltk
 from docx import Document
-from nltk.tokenize import sent_tokenize
 from PyQt5.QtWidgets import QApplication, QMainWindow, QPushButton, QVBoxLayout, QWidget, QLabel, QLineEdit, QFileDialog, QTextEdit, QFormLayout, QComboBox, QMessageBox
 from PyQt5.QtGui import QTextCursor
 from PyQt5.QtWidgets import QCheckBox
@@ -36,50 +31,6 @@ class QualiGPTApp(QMainWindow):
         self.dataset_segments = []
         self.saved_segments = []
         self.all_responses = [] # Used to store all responses
-
-        # Initialize prompts dictionary
-        self.prompts = {
-                "Interview": "You need to analyze an dataset of interviews. \
-                \nPlease identify the top {num_themes} key themes from the interview and organize the results in a structured table format. \
-                \nThe table should includes these items:\
-                \n- 'Theme': Represents the main idea or topic identified from the interview.\
-                \n- 'Description': Provides a brief explanation or summary of the theme.\
-                \n- 'Quotes': Contains direct quotations from participants that support the identified theme.\
-                \n- 'Participant Count': Indicates the number of participants who mentioned or alluded to the theme.\
-                \nThe table should be formatted as follows: \
-                \nEach column should be separated by a '|' symbol, and there should be no extra '|' symbols within the data. Each row should end with '---'. \
-                \nThe whole table should start with '**********' and end with '**********'.\
-                \nColumns: | 'Theme' | 'Description' | 'Quotes' | 'Participant Count' |. \
-                \nEnsure each row of the table represents a distinct theme and its associated details. Aggregate the counts for each theme to show the total number of mentions across all participants.",
-            "Focus Group": "You need to analyze an dataset of a focus group. \
-                \nPlease identify the {num_themes} most common key themes from the interview and organize the results in a structured table format. \
-                \nThe table should includes these items:\
-                \n- 'Theme': Represents the main idea or topic identified from the interview.\
-                \n- 'Description': Provides a brief explanation or summary of the theme.\
-                \n- 'Quotes': Contains direct quotations from participants that support the identified theme.\
-                \n- 'Participant Count': Indicates the number of participants who mentioned or alluded to the theme. Please ensure this count reflects the actual number of participants who discussed each theme.\
-                \nThe table should be formatted strictly as follows: \
-                \nThe table should have 4 columns only.\
-                \nEach column should be separated by a '|' symbol, and there should be no extra '|' symbols within the data. Each row should end with '---'. \
-                \nStart the table with '**********'.\
-                \nThe header row should be: | 'Theme' | 'Description' | 'Quotes' | 'Participant Count' | \
-                \nFollowed by a row of '|---|---|---|---|'.\
-                \nEnd the table with '**********'.\
-                \nEach subsequent row should represent a theme and its details, with columns separated by '|'.\
-                \nEnsure each row of the table represents a distinct theme and its associated details.",
-            "Social Media Posts": "You need to analyze an dataset of Social Media Posts. \
-                \nPlease identify the top {num_themes} key themes from the interview and organize the results in a structured table format. \
-                \nThe table should includes these items:\
-                \n- 'Theme': Represents the main idea or topic identified from the interview.\
-                \n- 'Description': Provides a brief explanation or summary of the theme.\
-                \n- 'Quotes': Contains direct quotations from participants that support the identified theme.\
-                \n- 'Participant Count': Indicates the number of participants who mentioned or alluded to the theme.\
-                \nThe table should be formatted as follows: \
-                \nEach column should be separated by a '|' symbol, and there should be no extra '|' symbols within the data. Each row should end with '---'. \
-                \nThe whole table should start with '**********' and end with '**********'.\
-                \nColumns: | 'Theme' | 'Description' | 'Quotes' | 'Participant Count' |. \
-                \nEnsure each row of the table represents a distinct theme and its associated details."
-            }
 
         # Initialize window
         self.setWindowTitle("QualiGPT: Qualitative Data Analysis Tool")
@@ -151,56 +102,22 @@ class QualiGPTApp(QMainWindow):
         # Display data area
         self.text_area = QTextEdit()
         self.layout.addWidget(self.text_area)
-        
-        # Role playing option
-        self.role_playing_checkbox = QCheckBox("Enable Role Playing")
-        self.layout.addWidget(self.role_playing_checkbox)
-        
-        # Data type selection
-        self.data_type_label = QLabel("Select Data Type:")
-        self.layout.addWidget(self.data_type_label)
-
-        # 使用QRadioButton代替QComboBox
-        self.interview_radio = QRadioButton("Interview")
-        self.focus_group_radio = QRadioButton("Focus Group")
-        self.social_media_radio = QRadioButton("Social Media Posts")
-        
-         # 将单选框添加到布局中
-        self.layout.addWidget(self.interview_radio)
-        self.layout.addWidget(self.focus_group_radio)
-        self.layout.addWidget(self.social_media_radio)
-
-        # 使用QButtonGroup确保只有一个单选框被选中
-        self.data_type_group = QButtonGroup(self)
-        self.data_type_group.addButton(self.interview_radio)
-        self.data_type_group.addButton(self.focus_group_radio)
-        self.data_type_group.addButton(self.social_media_radio)
-        
-        # 连接信号和槽
-        self.interview_radio.toggled.connect(self.update_preset_prompts)
-        self.focus_group_radio.toggled.connect(self.update_preset_prompts)
-        self.social_media_radio.toggled.connect(self.update_preset_prompts)
-        
-        # Number of key themes selection
-        self.key_themes_label = QLabel("Select Number of Key Themes:")
-        self.layout.addWidget(self.key_themes_label)
-        
-        self.key_themes_spinbox = QSpinBox(self)
-        self.key_themes_spinbox.setMinimum(1)
-        self.key_themes_spinbox.setMaximum(20)  # You can adjust this maximum value as needed
-        self.key_themes_spinbox.setValue(10)  # Default value
-        self.layout.addWidget(self.key_themes_spinbox)
 
         # Preset prompts
-        self.preset_prompts = QComboBox()
-        self.update_preset_prompts()
-        self.layout.addWidget(self.preset_prompts)
-    
-
-        # Custom prompt entry
-        self.custom_prompt_entry = QLineEdit()
-        self.custom_prompt_entry.setPlaceholderText("(optional) Enter your additional prompts here...")
-        self.layout.addWidget(self.custom_prompt_entry)
+        self.preset_prompt = QTextEdit()
+        self.preset_prompt.setPlainText("You need to analyze an dataset of interviews. \
+                \nPlease identify the top 10 key themes from the interview and organize the results in a structured table format. \
+                \nThe table should includes these items:\
+                \n- 'Theme': Represents the main idea or topic identified from the interview.\
+                \n- 'Description': Provides a brief explanation or summary of the theme.\
+                \n- 'Quotes': Contains direct quotations from participants that support the identified theme.\
+                \n- 'Participant Count': Indicates the number of participants who mentioned or alluded to the theme.\
+                \nThe table should be formatted as follows: \
+                \nEach column should be separated by a '|' symbol, and there should be no extra '|' symbols within the data. Each row should end with '---'. \
+                \nThe whole table should start with '**********' and end with '**********'.\
+                \nColumns: | 'Theme' | 'Description' | 'Quotes' | 'Participant Count' |. \
+                \nEnsure each row of the table represents a distinct theme and its associated details.")
+        self.layout.addWidget(self.preset_prompt)
 
         # Submit prompt and call ChatGPT API Button
         self.chatgpt_button = QPushButton("Submit Prompt and Call ChatGPT API")
@@ -222,30 +139,9 @@ class QualiGPTApp(QMainWindow):
         self.load_button.clicked.connect(self.load_result)
         self.layout.addWidget(self.load_button)
         
-    def update_preset_prompts(self):
-        #current_data_type = self.data_type_selection.currentText()
-            
-         # Use the QRadioButton's isChecked() method to check which box is checked.
-        if self.interview_radio.isChecked():
-            current_data_type = "Interview"
-        elif self.focus_group_radio.isChecked():
-            current_data_type = "Focus Group"
-        elif self.social_media_radio.isChecked():
-            current_data_type = "Social Media Posts"
-        else:
-            current_data_type = ""
-    
-        self.preset_prompts.clear()
-        if current_data_type in self.prompts:
-            self.preset_prompts.addItem(self.prompts[current_data_type])
-        
     def test_api_key(self):
         api_key = self.api_key_input.text()
         client = OpenAI(api_key=api_key)
-        if api_key == "albert":
-            api_key = "copy-right by He (Albert) Zhang "
-            #this application belongs to He (Albert) Zhang - hpz5211@psu.edu
-        openai.api_key = api_key
         try:
             # Simple test call to OpenAI
             client.chat.completions.create(model=self.model_selector.currentText(),
@@ -258,13 +154,15 @@ class QualiGPTApp(QMainWindow):
             self.connected_to_api = True
             self.TESTING = False
             self.model_selector.setEnabled(False)
-            QMessageBox.information(self, "Success", "API Key is valid. You are now connected to OpenAI.")
+            self.api_key_input.setEnabled(False)
+            self.connect_button.setEnabled(False)
+            QMessageBox.information(self, "Success", "Connection successful. You are now connected to OpenAI.")
         except Exception as e:
             traceback.print_exc()
             self.api_status_label.setText("API Connection: Disconnected")
             self.connected_to_api = False
             self.TESTING = True
-            QMessageBox.critical(self, "Error", "API Key is invalid. You are now in Testing mode.")
+            QMessageBox.critical(self, "Error", "Connection failed. You are now in Testing mode.")
 
 
     def get_file(self):
@@ -348,10 +246,7 @@ class QualiGPTApp(QMainWindow):
             QMessageBox.warning(self, "Warning", "Please connect to the OpenAI API first.")
             return
     
-        num_themes = self.key_themes_spinbox.value()
-        prompt = self.custom_prompt_entry.text().strip()
-        if not prompt:
-            prompt = self.preset_prompts.currentText().format(num_themes=num_themes)
+        prompt = self.preset_prompt.toPlainText()
     
         # Combine the dataset and the prompt into a single message
         #combined_message = self.data_content + "\n\n" + prompt
@@ -396,7 +291,7 @@ class QualiGPTApp(QMainWindow):
                     {"role": "system", "content": "You are a helpful assistant."},
                     {"role": "user", "content": combined_message}
                 ])
-                response_content = response['choices'][0]['message']['content']
+                response_content = response.choices[0].message.content
                 self.all_responses.append(response_content) # save the response
                 
                 # Check if the response is close to the token limit
@@ -419,7 +314,7 @@ class QualiGPTApp(QMainWindow):
     def analyze_merged_responses(self, merged_responses):
         # Construct a new prompt for the merged responses
         new_prompt = "This is the result of a thematic analysis of several parts of the dataset. Now, summarize the same themes to generate a new table. \
-        \nPlease identify the {num_themes} most common key themes from the interview and organize the results in a structured table format. \
+        \nPlease identify the 10 most common key themes from the interview and organize the results in a structured table format. \
         \nThe table should include the following columns:\
         \n'Theme': Represents the main idea or topic identified from the interview.\
         \n'Description': Provides a brief explanation or summary of the theme.\
