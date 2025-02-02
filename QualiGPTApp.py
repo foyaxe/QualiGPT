@@ -21,7 +21,6 @@ from PyQt5.QtWidgets import QCheckBox
 from PyQt5.QtWidgets import QRadioButton, QButtonGroup, QSpinBox
 import re
 import csv
-import docx2txt
 from nltk.tokenize import sent_tokenize, word_tokenize
 
 class QualiGPTApp(QMainWindow):
